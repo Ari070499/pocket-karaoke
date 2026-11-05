@@ -99,6 +99,8 @@ input[type=range]{width:100%;accent-color:var(--accent);height:28px;margin:0}
 .switch input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--fg);transition:left .15s}
 .switch input:checked{background:var(--accent)} .switch input:checked::after{left:21px}
 .switch input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tips{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--muted)}
+.tips b{color:var(--fg);font-weight:600}
 footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -130,8 +132,8 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
     <div class="meter" aria-hidden="true"><div class="meter-fill" id="meterFill"></div><div class="meter-mark" id="meterMark"></div></div>
     <div class="scale" aria-hidden="true"><span>-60</span><span>-45</span><span>-30</span><span>-15</span><span>0 dB</span></div>
     <div class="field">
-      <label for="sens">Mic sensitivity <span id="sensRead">gate at -45 dB</span></label>
-      <input type="range" id="sens" min="0" max="100" value="70">
+      <label for="sens">Mic sensitivity <span id="sensRead">gate at -40 dB</span></label>
+      <input type="range" id="sens" min="0" max="100" value="60">
       <div class="ends"><span>Low · blocks room noise</span><span>High · picks up soft singing</span></div>
     </div>
     <div class="row"><span class="gate" id="gate"><i></i><span id="gateText">Mic closed</span></span><span class="mono">White line = gate</span></div>
@@ -174,8 +176,13 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
   <section class="card" aria-labelledby="h-mix">
     <h2 id="h-mix">Mix</h2>
     <div class="field">
+      <label for="boost">Mic boost <span id="boostRead">+18 dB</span></label>
+      <input type="range" id="boost" min="0" max="30" value="18">
+      <div class="ends"><span>Quieter</span><span>Louder · lower it if you hear squealing</span></div>
+    </div>
+    <div class="field">
       <label for="voiceVol">Voice volume <span id="voiceRead">100%</span></label>
-      <input type="range" id="voiceVol" min="0" max="150" value="100">
+      <input type="range" id="voiceVol" min="0" max="200" value="100">
     </div>
     <div class="field">
       <label for="musicVol">Music volume <span id="musicRead">70%</span></label>
@@ -183,7 +190,16 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
     </div>
   </section>
 
-  <footer>Prototype v0.1 · Your voice will reach the speaker a little late. That delay comes from Bluetooth itself.</footer>
+  <section class="card" aria-labelledby="h-tips">
+    <h2 id="h-tips">If it sounds soft or late</h2>
+    <ul class="tips">
+      <li><b>Press your phone's volume-up buttons while you're live.</b> Once the mic is on, phones switch to a separate volume level, so turn it up again.</li>
+      <li><b>Raise Mic boost</b> above, and sing close to the phone's bottom edge, where the mic is.</li>
+      <li><b>For the least delay, use an AUX cable</b> to the speaker if it has an input jack. Bluetooth alone adds about 150–250 ms that no app can remove.</li>
+    </ul>
+  </section>
+
+  <footer>Prototype v0.2</footer>
   <audio id="audio" preload="auto"></audio>
 </main>
 
@@ -219,9 +235,9 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
     N.hp = ctx.createBiquadFilter(); N.hp.type = 'highpass'; N.hp.frequency.value = 90;
     N.bass = ctx.createBiquadFilter(); N.bass.type = 'lowshelf'; N.bass.frequency.value = 180; N.bass.gain.value = 0;
     N.treble = ctx.createBiquadFilter(); N.treble.type = 'highshelf'; N.treble.frequency.value = 3500; N.treble.gain.value = 0;
-    N.comp = ctx.createDynamicsCompressor();
-    N.comp.threshold.value = -24; N.comp.ratio.value = 3; N.comp.attack.value = .005; N.comp.release.value = .2;
-    N.gate.connect(N.hp); N.hp.connect(N.bass); N.bass.connect(N.treble); N.treble.connect(N.comp);
+    // No compressors in the chain: each one adds ~6 ms of look-ahead delay.
+    N.comp = N.treble;
+    N.gate.connect(N.hp); N.hp.connect(N.bass); N.bass.connect(N.treble);
 
     N.voiceVol = g(+$('voiceVol').value / 100);
     N.dry = g(1); N.comp.connect(N.dry); N.dry.connect(N.voiceVol);
@@ -231,10 +247,17 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
     N.fb = g(.35); N.echoWet = g(0);
     N.comp.connect(N.delay); N.delay.connect(N.fb); N.fb.connect(N.delay); N.delay.connect(N.echoWet); N.echoWet.connect(N.voiceVol);
 
+    // Mic boost: phone mics are quiet once auto-volume is off, so lift the signal before the gate.
+    N.micBoost = g(dbToGain(+$('boost').value));
+    N.micBoost.connect(N.voiceIn);
+
+    // Master: zero-delay soft clipper keeps it loud without harsh distortion.
     N.master = g(1);
-    N.limiter = ctx.createDynamicsCompressor();
-    N.limiter.threshold.value = -3; N.limiter.ratio.value = 20; N.limiter.attack.value = .002; N.limiter.release.value = .1;
-    N.voiceVol.connect(N.master); N.master.connect(N.limiter); N.limiter.connect(ctx.destination);
+    N.clip = ctx.createWaveShaper();
+    const curve = new Float32Array(2048), k = 1.4;
+    for (let i = 0; i < curve.length; i++) { const x = i / (curve.length - 1) * 2 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); }
+    N.clip.curve = curve;
+    N.voiceVol.connect(N.master); N.master.connect(N.clip); N.clip.connect(ctx.destination);
 
     // Music chain: <audio> -> normal or vocal-cut (L minus R) -> musicVol -> master (or into the voice effects)
     N.media = ctx.createMediaElementSource(audioEl);
@@ -251,6 +274,7 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
     return ctx;
   }
 
+  function dbToGain(db) { return Math.pow(10, db / 20); }
   function set(param, v) { if (ctx) param.setTargetAtTime(v, ctx.currentTime, .04); }
 
   function routeMusic() {
@@ -316,13 +340,13 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
     }
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: {
-        echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, latency: 0 } });
     } catch (e) {
       showNotice('<b>The mic is blocked.</b> Allow microphone access for this page in your browser settings, then tap Go live again. Inside the Claude preview window the mic is always blocked, so use “Try effects on the song” there.');
       return;
     }
     micSrc = ctx.createMediaStreamSource(micStream);
-    micSrc.connect(N.voiceIn);
+    micSrc.connect(N.micBoost);
     live = true;
     try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
     renderLive();
@@ -391,6 +415,7 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
   $('fxSong').addEventListener('change', () => { ensureCtx(); ctx.resume(); routeMusic(); });
 
   // Mix
+  $('boost').addEventListener('input', e => { $('boostRead').textContent = '+' + e.target.value + ' dB'; if (ctx) set(N.micBoost.gain, dbToGain(+e.target.value)); });
   $('voiceVol').addEventListener('input', e => { $('voiceRead').textContent = e.target.value + '%'; if (ctx) set(N.voiceVol.gain, e.target.value / 100); });
   $('musicVol').addEventListener('input', e => { $('musicRead').textContent = e.target.value + '%'; if (ctx) set(N.musicVol.gain, e.target.value / 100); });
 })();
