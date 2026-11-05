@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#17121f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Karaoke">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>Pocket Karaoke Mic</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one narrow phone column — mic button on top, then meter, effects, song, mix. Single dark "stage" look. */
+:root{
+  --bg:#17121f; --surface:#221a2e; --surface-2:#2c2239; --line:#3b3049;
+  --fg:#f4eef8; --muted:#a99cb8;
+  --accent:#ffa94d; --accent-ink:#2a1606;
+  --live:#ff5d73; --ok:#58d39f;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  --r:16px;
+  color-scheme:dark;
+}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:16px 40px}
+.app{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-family:var(--f-display);font-weight:800;font-size:22px;letter-spacing:-.01em;margin:0}
+.chip{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip.on{border-color:var(--live);color:var(--live)}
+.chip.preview{border-color:var(--accent);color:var(--accent)}
+.notice{background:var(--surface-2);border:1px solid var(--accent);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--fg)}
+.notice b{color:var(--accent)}
+
+.stage{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 0 4px}
+.mic{--lvl:0;position:relative;width:176px;height:176px;border-radius:50%;border:0;cursor:pointer;
+  background:conic-gradient(var(--accent) calc(var(--lvl)*1turn), var(--surface-2) 0);
+  display:grid;place-items:center;padding:0;color:var(--fg);transition:transform .15s}
+.mic:active{transform:scale(.97)}
+.mic-inner{width:150px;height:150px;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;border:2px solid var(--line)}
+.mic.live{background:conic-gradient(var(--live) calc(var(--lvl)*1turn), var(--surface-2) 0)}
+.mic.live .mic-inner{border-color:var(--live)}
+.mic svg{width:44px;height:44px}
+.mic-label{font-family:var(--f-display);font-weight:600;font-size:18px}
+.mic:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.hint{margin:0;text-align:center;color:var(--muted);font-size:13.5px;max-width:34ch;text-wrap:balance}
+.mono{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin:0;font-variant-numeric:tabular-nums}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.card h2{margin:0;font-family:var(--f-display);font-weight:600;font-size:16px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card h2 small{font-family:var(--f-mono);font-weight:500;font-size:12px;color:var(--muted)}
+
+.meter{position:relative;height:16px;border-radius:8px;background:var(--surface-2);overflow:hidden}
+.meter-fill{position:absolute;inset:0;transform-origin:left;transform:scaleX(0);
+  background:linear-gradient(90deg,var(--ok) 0 60%,var(--accent) 60% 85%,var(--live) 85%)}
+.meter-mark{position:absolute;top:-2px;bottom:-2px;width:3px;background:var(--fg);border-radius:2px;left:30%}
+.scale{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10.5px;color:var(--muted);margin-top:-6px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.gate{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.gate i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.gate.open i{background:var(--ok)} .gate.open{color:var(--fg)}
+
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:13.5px;font-weight:600;display:flex;justify-content:space-between}
+.field label span{font-family:var(--f-mono);font-weight:500;font-size:12px;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px;margin:0}
+.ends{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:-4px}
+
+.fx-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fx{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border:1.5px solid var(--line);border-radius:12px;padding:10px}
+.fx.on{border-color:var(--accent)}
+.fx-toggle{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;border-radius:8px}
+.fx-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.fx-name{font-family:var(--f-display);font-weight:600;font-size:16px;display:flex;justify-content:space-between;align-items:center}
+.fx-name::after{content:"OFF";font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;color:var(--muted)}
+.fx.on .fx-name::after{content:"ON";color:var(--accent)}
+.fx-desc{font-size:12px;color:var(--muted)}
+
+.song-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.btn{font:inherit;font-weight:600;border-radius:12px;border:1.5px solid var(--line);background:var(--surface-2);color:var(--fg);
+  padding:10px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.player{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.play{width:46px;height:46px;border-radius:50%;padding:0}
+.switch{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer}
+.switch-text{display:flex;flex-direction:column;min-width:0}
+.switch-text b{font-size:14px} .switch-text small{color:var(--muted);font-size:12px}
+.switch input{appearance:none;width:44px;height:26px;border-radius:13px;background:var(--line);position:relative;flex:none;cursor:pointer;margin:0;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--fg);transition:left .15s}
+.switch input:checked{background:var(--accent)} .switch input:checked::after{left:21px}
+.switch input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+footer{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 8px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="app">
+  <header>
+    <h1 class="brand">Pocket Karaoke</h1>
+    <span class="chip" id="status">Off air</span>
+  </header>
+
+  <div class="notice" id="notice" hidden></div>
+
+  <section class="stage">
+    <button class="mic" id="liveBtn" aria-pressed="false">
+      <span class="mic-inner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <rect x="9" y="3" width="6" height="11" rx="3" fill="none"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>
+        </svg>
+        <span class="mic-label" id="liveLabel">Go live</span>
+      </span>
+    </button>
+    <p class="hint" id="liveHint">Connect your Bluetooth speaker first. Hold the phone a few steps away from it to avoid squealing.</p>
+    <p class="mono" id="delay">Delay: starts when audio is on</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-sens">
+    <h2 id="h-sens">Sensitivity <small id="dbRead">— dB</small></h2>
+    <div class="meter" aria-hidden="true"><div class="meter-fill" id="meterFill"></div><div class="meter-mark" id="meterMark"></div></div>
+    <div class="scale" aria-hidden="true"><span>-60</span><span>-45</span><span>-30</span><span>-15</span><span>0 dB</span></div>
+    <div class="field">
+      <label for="sens">Mic sensitivity <span id="sensRead">gate at -45 dB</span></label>
+      <input type="range" id="sens" min="0" max="100" value="70">
+      <div class="ends"><span>Low · blocks room noise</span><span>High · picks up soft singing</span></div>
+    </div>
+    <div class="row"><span class="gate" id="gate"><i></i><span id="gateText">Mic closed</span></span><span class="mono">White line = gate</span></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-fx">
+    <h2 id="h-fx">Voice effects <small>tap to switch on</small></h2>
+    <div class="fx-grid" id="fxGrid">
+      <div class="fx" data-fx="reverb"><button class="fx-toggle" aria-pressed="false"><span class="fx-name">Reverb</span><span class="fx-desc">Big hall sound</span></button><input type="range" id="amt-reverb" min="0" max="100" value="50" aria-label="Reverb amount" hidden></div>
+      <div class="fx" data-fx="echo"><button class="fx-toggle" aria-pressed="false"><span class="fx-name">Echo</span><span class="fx-desc">Repeats your voice</span></button><input type="range" id="amt-echo" min="0" max="100" value="45" aria-label="Echo amount" hidden></div>
+      <div class="fx" data-fx="bass"><button class="fx-toggle" aria-pressed="false"><span class="fx-name">Bass</span><span class="fx-desc">Warmer, deeper voice</span></button><input type="range" id="amt-bass" min="0" max="100" value="50" aria-label="Bass amount" hidden></div>
+      <div class="fx" data-fx="bright"><button class="fx-toggle" aria-pressed="false"><span class="fx-name">Bright</span><span class="fx-desc">Clearer, crisper voice</span></button><input type="range" id="amt-bright" min="0" max="100" value="50" aria-label="Bright amount" hidden></div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-song">
+    <h2 id="h-song">Song <small id="timeRead">0:00 / 0:00</small></h2>
+    <div class="row">
+      <span class="song-name" id="songName">No song loaded</span>
+      <label class="btn primary" for="file">Pick a song</label>
+      <input type="file" id="file" accept="audio/*" hidden>
+    </div>
+    <div class="player">
+      <button class="btn play" id="playBtn" disabled aria-label="Play">
+        <svg id="playIcon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Song position" disabled>
+      <span></span>
+    </div>
+    <label class="switch" for="vocalCut">
+      <span class="switch-text"><b>Vocal cut</b><small>Removes the original singer on many studio tracks</small></span>
+      <input type="checkbox" id="vocalCut">
+    </label>
+    <label class="switch" for="fxSong">
+      <span class="switch-text"><b>Try effects on the song</b><small>No mic needed. Sends the song through the voice effects so you can hear them.</small></span>
+      <input type="checkbox" id="fxSong">
+    </label>
+  </section>
+
+  <section class="card" aria-labelledby="h-mix">
+    <h2 id="h-mix">Mix</h2>
+    <div class="field">
+      <label for="voiceVol">Voice volume <span id="voiceRead">100%</span></label>
+      <input type="range" id="voiceVol" min="0" max="150" value="100">
+    </div>
+    <div class="field">
+      <label for="musicVol">Music volume <span id="musicRead">70%</span></label>
+      <input type="range" id="musicVol" min="0" max="100" value="70">
+    </div>
+  </section>
+
+  <footer>Prototype v0.1 · Your voice will reach the speaker a little late. That delay comes from Bluetooth itself.</footer>
+  <audio id="audio" preload="auto"></audio>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const audioEl = $('audio');
+  let ctx = null, N = {}, micStream = null, micSrc = null, live = false, wakeLock = null, holdUntil = 0;
+  const fx = { reverb:{on:false,amt:.5}, echo:{on:false,amt:.45}, bass:{on:false,amt:.5}, bright:{on:false,amt:.5} };
+  let thresholdDb = -45;
+
+  function makeImpulse(seconds) {
+    const rate = ctx.sampleRate, len = Math.floor(rate * seconds);
+    const buf = ctx.createBuffer(2, len, rate);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+    return buf;
+  }
+
+  function ensureCtx() {
+    if (ctx) return ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC({ latencyHint: 'interactive' });
+    const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; };
+
+    // Voice chain: voiceIn -> gate -> highpass -> bass -> treble -> compressor -> dry / reverb / echo -> voiceVol -> master
+    N.voiceIn = g(1);
+    N.analyser = ctx.createAnalyser(); N.analyser.fftSize = 1024;
+    N.voiceIn.connect(N.analyser);
+    N.gate = g(0); N.voiceIn.connect(N.gate);
+    N.hp = ctx.createBiquadFilter(); N.hp.type = 'highpass'; N.hp.frequency.value = 90;
+    N.bass = ctx.createBiquadFilter(); N.bass.type = 'lowshelf'; N.bass.frequency.value = 180; N.bass.gain.value = 0;
+    N.treble = ctx.createBiquadFilter(); N.treble.type = 'highshelf'; N.treble.frequency.value = 3500; N.treble.gain.value = 0;
+    N.comp = ctx.createDynamicsCompressor();
+    N.comp.threshold.value = -24; N.comp.ratio.value = 3; N.comp.attack.value = .005; N.comp.release.value = .2;
+    N.gate.connect(N.hp); N.hp.connect(N.bass); N.bass.connect(N.treble); N.treble.connect(N.comp);
+
+    N.voiceVol = g(+$('voiceVol').value / 100);
+    N.dry = g(1); N.comp.connect(N.dry); N.dry.connect(N.voiceVol);
+    N.conv = ctx.createConvolver(); N.conv.buffer = makeImpulse(2.4);
+    N.revWet = g(0); N.comp.connect(N.conv); N.conv.connect(N.revWet); N.revWet.connect(N.voiceVol);
+    N.delay = ctx.createDelay(1.5); N.delay.delayTime.value = .32;
+    N.fb = g(.35); N.echoWet = g(0);
+    N.comp.connect(N.delay); N.delay.connect(N.fb); N.fb.connect(N.delay); N.delay.connect(N.echoWet); N.echoWet.connect(N.voiceVol);
+
+    N.master = g(1);
+    N.limiter = ctx.createDynamicsCompressor();
+    N.limiter.threshold.value = -3; N.limiter.ratio.value = 20; N.limiter.attack.value = .002; N.limiter.release.value = .1;
+    N.voiceVol.connect(N.master); N.master.connect(N.limiter); N.limiter.connect(ctx.destination);
+
+    // Music chain: <audio> -> normal or vocal-cut (L minus R) -> musicVol -> master (or into the voice effects)
+    N.media = ctx.createMediaElementSource(audioEl);
+    N.normal = g(1); N.media.connect(N.normal);
+    N.split = ctx.createChannelSplitter(2);
+    N.gL = g(1); N.gR = g(-1); N.cutSum = g(1); N.cutGain = g(0);
+    N.media.connect(N.split); N.split.connect(N.gL, 0); N.split.connect(N.gR, 1);
+    N.gL.connect(N.cutSum); N.gR.connect(N.cutSum); N.cutSum.connect(N.cutGain);
+    N.musicVol = g(+$('musicVol').value / 100);
+    N.normal.connect(N.musicVol); N.cutGain.connect(N.musicVol);
+
+    routeMusic(); applyFx(); applyVocalCut();
+    requestAnimationFrame(tick);
+    return ctx;
+  }
+
+  function set(param, v) { if (ctx) param.setTargetAtTime(v, ctx.currentTime, .04); }
+
+  function routeMusic() {
+    if (!ctx) return;
+    try { N.musicVol.disconnect(); } catch (e) {}
+    N.musicVol.connect($('fxSong').checked ? N.voiceIn : N.master);
+    updateStatus();
+  }
+  function applyVocalCut() {
+    if (!ctx) return;
+    const on = $('vocalCut').checked;
+    set(N.normal.gain, on ? 0 : 1); set(N.cutGain.gain, on ? 1 : 0);
+  }
+  function applyFx() {
+    if (!ctx) return;
+    set(N.revWet.gain, fx.reverb.on ? fx.reverb.amt * .9 : 0);
+    set(N.echoWet.gain, fx.echo.on ? fx.echo.amt * .7 : 0);
+    set(N.fb.gain, .2 + fx.echo.amt * .35);
+    set(N.bass.gain, fx.bass.on ? fx.bass.amt * 10 : 0);
+    set(N.treble.gain, fx.bright.on ? fx.bright.amt * 9 : 0);
+  }
+
+  // Level meter + noise gate
+  const buf = new Float32Array(1024);
+  function tick() {
+    N.analyser.getFloatTimeDomainData(buf);
+    let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    const rms = Math.sqrt(sum / buf.length);
+    const db = rms > 0 ? Math.max(-60, 20 * Math.log10(rms)) : -60;
+    const frac = (db + 60) / 60;
+    $('meterFill').style.transform = `scaleX(${frac.toFixed(3)})`;
+    $('liveBtn').style.setProperty('--lvl', frac.toFixed(3));
+    $('dbRead').textContent = db <= -59.5 ? '— dB' : `${db.toFixed(0)} dB`;
+    const now = performance.now();
+    if (db > thresholdDb) holdUntil = now + 250;
+    const open = now < holdUntil;
+    N.gate.gain.setTargetAtTime(open ? 1 : 0, ctx.currentTime, open ? .01 : .12);
+    $('gate').classList.toggle('open', open);
+    $('gateText').textContent = open ? 'Mic open, sound is passing' : 'Mic closed, too quiet';
+    requestAnimationFrame(tick);
+  }
+
+  function showDelay() {
+    const ms = Math.round(((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000);
+    $('delay').textContent = ms ? `App delay ≈ ${ms} ms · Bluetooth adds about 150–250 ms` : 'Bluetooth adds about 150–250 ms of delay';
+  }
+
+  function updateStatus() {
+    const s = $('status');
+    s.classList.remove('on', 'preview');
+    if (live) { s.textContent = 'On air'; s.classList.add('on'); }
+    else if ($('fxSong').checked) { s.textContent = 'Effects on song'; s.classList.add('preview'); }
+    else s.textContent = 'Off air';
+  }
+
+  function showNotice(html) { const n = $('notice'); n.innerHTML = html; n.hidden = false; }
+
+  async function goLive() {
+    ensureCtx(); await ctx.resume(); showDelay();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showNotice('<b>This browser can’t reach the mic.</b> Open the app over https (GitHub Pages) or in Chrome on your laptop.');
+      return;
+    }
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: {
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+    } catch (e) {
+      showNotice('<b>The mic is blocked.</b> Allow microphone access for this page in your browser settings, then tap Go live again. Inside the Claude preview window the mic is always blocked, so use “Try effects on the song” there.');
+      return;
+    }
+    micSrc = ctx.createMediaStreamSource(micStream);
+    micSrc.connect(N.voiceIn);
+    live = true;
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+    renderLive();
+  }
+  function stopLive() {
+    try { micSrc && micSrc.disconnect(); } catch (e) {}
+    micStream && micStream.getTracks().forEach(t => t.stop());
+    micStream = null; micSrc = null; live = false;
+    try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null;
+    renderLive();
+  }
+  function renderLive() {
+    $('liveBtn').classList.toggle('live', live);
+    $('liveBtn').setAttribute('aria-pressed', live);
+    $('liveLabel').textContent = live ? 'Live · tap to stop' : 'Go live';
+    $('liveHint').textContent = live ? 'Sing! Turn the speaker down a little if you hear squealing.' :
+      'Connect your Bluetooth speaker first. Hold the phone a few steps away from it to avoid squealing.';
+    updateStatus();
+  }
+  $('liveBtn').addEventListener('click', () => live ? stopLive() : goLive());
+
+  // Sensitivity
+  function readSens() {
+    const s = +$('sens').value;
+    thresholdDb = Math.round(-10 - s * 0.5);
+    $('sensRead').textContent = `gate at ${thresholdDb} dB`;
+    $('meterMark').style.left = `calc(${((thresholdDb + 60) / 60) * 100}% - 1.5px)`;
+  }
+  $('sens').addEventListener('input', readSens); readSens();
+
+  // Effects
+  document.querySelectorAll('.fx').forEach(tile => {
+    const key = tile.dataset.fx, btn = tile.querySelector('.fx-toggle'), amt = tile.querySelector('input');
+    btn.addEventListener('click', () => {
+      ensureCtx(); ctx.resume();
+      fx[key].on = !fx[key].on;
+      tile.classList.toggle('on', fx[key].on); btn.setAttribute('aria-pressed', fx[key].on);
+      amt.hidden = !fx[key].on; applyFx();
+    });
+    amt.addEventListener('input', () => { fx[key].amt = amt.value / 100; applyFx(); });
+  });
+
+  // Song
+  const fmt = t => isFinite(t) ? `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}` : '0:00';
+  $('file').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    ensureCtx(); ctx.resume();
+    if (audioEl.src) URL.revokeObjectURL(audioEl.src);
+    audioEl.src = URL.createObjectURL(f);
+    $('songName').textContent = f.name.replace(/\.[^.]+$/, '');
+    $('playBtn').disabled = false; $('seek').disabled = false;
+  });
+  const playIcon = '<path d="M8 5v14l11-7z"/>', pauseIcon = '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>';
+  $('playBtn').addEventListener('click', async () => {
+    ensureCtx(); await ctx.resume(); showDelay();
+    if (audioEl.paused) await audioEl.play(); else audioEl.pause();
+  });
+  audioEl.addEventListener('play', () => { $('playIcon').innerHTML = pauseIcon; $('playBtn').setAttribute('aria-label', 'Pause'); });
+  audioEl.addEventListener('pause', () => { $('playIcon').innerHTML = playIcon; $('playBtn').setAttribute('aria-label', 'Play'); });
+  audioEl.addEventListener('timeupdate', () => {
+    $('timeRead').textContent = `${fmt(audioEl.currentTime)} / ${fmt(audioEl.duration)}`;
+    if (audioEl.duration) $('seek').value = Math.round(audioEl.currentTime / audioEl.duration * 1000);
+  });
+  $('seek').addEventListener('input', () => { if (audioEl.duration) audioEl.currentTime = $('seek').value / 1000 * audioEl.duration; });
+  $('vocalCut').addEventListener('change', () => { ensureCtx(); applyVocalCut(); });
+  $('fxSong').addEventListener('change', () => { ensureCtx(); ctx.resume(); routeMusic(); });
+
+  // Mix
+  $('voiceVol').addEventListener('input', e => { $('voiceRead').textContent = e.target.value + '%'; if (ctx) set(N.voiceVol.gain, e.target.value / 100); });
+  $('musicVol').addEventListener('input', e => { $('musicRead').textContent = e.target.value + '%'; if (ctx) set(N.musicVol.gain, e.target.value / 100); });
+})();
+</script>
+</body>
+</html>
